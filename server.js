@@ -1,8 +1,9 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { extname, join, resolve, relative } from "node:path";
+import { basename, extname, join, resolve, relative } from "node:path";
 
 const ROOT = process.argv[2] ? resolve(process.argv[2]) : process.cwd();
+const ROOT_NAME = basename(ROOT);
 const PORT = parseInt(process.env.PORT || "8881", 10);
 const ADDR = process.env.ADDRESS || "127.0.0.1";
 
@@ -179,7 +180,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
   <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <span class="sidebar-title"><a href="/">docs</a></span>
+      <span class="sidebar-title"><a href="/">${ROOT_NAME}</a></span>
       <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌓</button>
       <button class="collapse-btn" onclick="toggleSidebar()" title="Hide sidebar">◀</button>
     </div>
@@ -313,7 +314,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
 function breadcrumb(urlPath) {
   const parts = urlPath.split("/").filter(Boolean);
   let acc = "/";
-  let links = [`<a href="/">docs</a>`];
+  let links = [`<a href="/">${ROOT_NAME}</a>`];
   for (const p of parts) {
     acc += p + "/";
     links.push(`<a href="${acc}">${p}</a>`);
@@ -334,7 +335,7 @@ function dirPage(urlPath, entries, sidebar) {
     })
     .join("\n");
 
-  const content = `<h1>${urlPath === "/" ? "docs" : urlPath}</h1>\n<ul class="dir-listing">\n${items}\n</ul>`;
+  const content = `<h1>${urlPath === "/" ? ROOT_NAME : urlPath}</h1>\n<ul class="dir-listing">\n${items}\n</ul>`;
   return PAGE_TEMPLATE
     .replace("{{TITLE}}", urlPath)
     .replace("{{SIDEBAR}}", sidebar)
