@@ -395,6 +395,12 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
         }
       });
 
+      // Close mobile sidebar after navigation
+      if (isMobile()) {
+        document.getElementById('sidebar').classList.remove('open-mobile');
+        document.getElementById('sidebar-overlay').classList.remove('visible');
+      }
+
       window.scrollTo(0, 0);
     }
 
