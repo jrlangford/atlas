@@ -189,8 +189,9 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     body.dark .theme-toggle { border-color: #444; color: #e6edf3; }
     body.light .theme-toggle { border-color: #ccc; color: #1f2328; }
 
-    /* Sidebar pull-tab — attached to right edge, pokes out when collapsed */
-    .sidebar-tab { position: absolute; top: 12px; right: -24px; width: 24px; height: 32px; cursor: pointer; border: 1px solid; border-left: none; border-radius: 0 6px 6px 0; display: flex; align-items: center; justify-content: center; font-size: 12px; z-index: 11; transition: opacity 0.2s; }
+    /* Sidebar pull-tab — fixed position, slides with sidebar */
+    .sidebar-tab { position: fixed; top: 12px; left: 280px; width: 24px; height: 32px; cursor: pointer; border: 1px solid; border-left: none; border-radius: 0 6px 6px 0; display: flex; align-items: center; justify-content: center; font-size: 12px; z-index: 11; transition: left 0.2s ease; }
+    .sidebar-tab.shifted { left: 0; }
     body.dark .sidebar-tab { background: #010409; border-color: #21262d; color: #8b949e; }
     body.light .sidebar-tab { background: #f6f8fa; border-color: #d1d9e0; color: #656d76; }
     .sidebar-tab:hover { opacity: 1; }
@@ -263,6 +264,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     /* Pre-paint sidebar collapse (prevents flash on page load) */
     html[data-sidebar="collapsed"] .sidebar { transform: translateX(-280px); }
     html[data-sidebar="collapsed"] .main { margin-left: 0; width: 100%; }
+    html[data-sidebar="collapsed"] .sidebar-tab { left: 0; }
 
     .mermaid .node rect, .mermaid .node polygon, .mermaid .node circle, .mermaid .node .label-container { overflow: visible; }
     .mermaid svg { overflow: visible; }
@@ -279,8 +281,8 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
 </head>
 <body class="dark">
   <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+  <div class="sidebar-tab" id="sidebar-tab" onclick="toggleSidebar()" title="Toggle sidebar">◀</div>
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-tab" id="sidebar-tab" onclick="toggleSidebar()" title="Toggle sidebar">◀</div>
     <div class="sidebar-header">
       <span class="sidebar-title"><a href="/">{{ROOT_NAME}}</a></span>
       <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌓</button>
@@ -311,7 +313,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       } else {
         var collapsed = sb.classList.toggle('collapsed');
         main.classList.toggle('expanded', collapsed);
-        if (tab) tab.textContent = collapsed ? '▶' : '◀';
+        if (tab) { tab.textContent = collapsed ? '▶' : '◀'; tab.classList.toggle('shifted', collapsed); }
         localStorage.setItem('mdview-sidebar', collapsed ? 'collapsed' : 'open');
       }
     }
@@ -320,7 +322,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
         document.getElementById('sidebar').classList.add('collapsed');
         document.querySelector('.main').classList.add('expanded');
         var tab = document.getElementById('sidebar-tab');
-        if (tab) tab.textContent = '▶';
+        if (tab) { tab.textContent = '▶'; tab.classList.add('shifted'); }
       }
     })();
 
