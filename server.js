@@ -314,6 +314,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
         var collapsed = sb.classList.toggle('collapsed');
         main.classList.toggle('expanded', collapsed);
         if (tab) { tab.textContent = collapsed ? '▶' : '◀'; tab.classList.toggle('shifted', collapsed); }
+        document.documentElement.setAttribute('data-sidebar', collapsed ? 'collapsed' : 'open');
         localStorage.setItem('mdview-sidebar', collapsed ? 'collapsed' : 'open');
       }
     }
