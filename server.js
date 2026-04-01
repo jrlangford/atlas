@@ -189,11 +189,11 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     body.dark .theme-toggle, body.dark .collapse-btn { border-color: #444; color: #e6edf3; }
     body.light .theme-toggle, body.light .collapse-btn { border-color: #ccc; color: #1f2328; }
 
-    /* Expand button (visible when sidebar is collapsed) */
-    .expand-btn { position: fixed; top: 12px; left: 12px; z-index: 11; cursor: pointer; background: none; border: 1px solid; border-radius: 6px; padding: 4px 10px; font-size: 16px; line-height: 1; transition: opacity 0.2s; }
-    .expand-btn.hidden { opacity: 0; pointer-events: none; }
-    body.dark .expand-btn { border-color: #444; background: #010409; color: #e6edf3; }
-    body.light .expand-btn { border-color: #ccc; background: #f6f8fa; color: #1f2328; }
+    /* Menu toggle (inline in top-bar, hidden on desktop when sidebar is open) */
+    .menu-toggle { cursor: pointer; background: none; border: 1px solid; border-radius: 6px; padding: 2px 8px; font-size: 16px; line-height: 1; flex-shrink: 0; display: none; }
+    .menu-toggle.visible { display: inline-block; }
+    body.dark .menu-toggle { border-color: #444; color: #e6edf3; }
+    body.light .menu-toggle { border-color: #ccc; color: #1f2328; }
 
     /* Tree */
     .sidebar ul { list-style: none; padding-left: 14px; margin: 0; }
@@ -214,8 +214,8 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     /* Main content */
     .main { margin-left: 280px; flex: 1; padding: 20px; width: calc(100% - 280px); transition: margin-left 0.2s ease, width 0.2s ease; }
     .main.expanded { margin-left: 0; width: 100%; }
-    .top-bar { max-width: 980px; margin: 0 auto 12px; padding: 0 24px; font-size: 14px; }
-    .breadcrumb { flex: 1; }
+    .top-bar { max-width: 980px; margin: 0 auto 12px; padding: 0 24px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .breadcrumb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     body.dark .breadcrumb a { color: #58a6ff; }
     body.light .breadcrumb a { color: #0969da; }
     .breadcrumb a { text-decoration: none; }
@@ -250,13 +250,12 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       .sidebar { transform: translateX(-280px); }
       .sidebar.open-mobile { transform: translateX(0); }
       .sidebar-overlay.visible { display: block; }
-      .expand-btn { opacity: 1; pointer-events: auto; }
-      .expand-btn.hidden { opacity: 1; pointer-events: auto; }
+      .menu-toggle { display: inline-block; }
     }
     /* Pre-paint sidebar collapse (prevents flash on page load) */
     html[data-sidebar="collapsed"] .sidebar { transform: translateX(-280px); }
     html[data-sidebar="collapsed"] .main { margin-left: 0; width: 100%; }
-    html[data-sidebar="collapsed"] .expand-btn { opacity: 1; pointer-events: auto; }
+    html[data-sidebar="collapsed"] .menu-toggle { display: inline-block; }
 
     .mermaid .node rect, .mermaid .node polygon, .mermaid .node circle, .mermaid .node .label-container { overflow: visible; }
     .mermaid svg { overflow: visible; }
@@ -272,11 +271,10 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
   </script>
 </head>
 <body class="dark">
-  <button class="expand-btn hidden" id="expand-btn" onclick="toggleSidebar()" title="Show sidebar">☰</button>
   <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <span class="sidebar-title"><a href="/">\${ROOT_NAME}</a></span>
+      <span class="sidebar-title"><a href="/">{{ROOT_NAME}}</a></span>
       <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌓</button>
       <button class="collapse-btn" onclick="toggleSidebar()" title="Hide sidebar">◀</button>
     </div>
@@ -284,6 +282,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
   </aside>
   <div class="main" id="main-content">
     <div class="top-bar">
+      <button class="menu-toggle" id="menu-toggle" onclick="toggleSidebar()" title="Toggle sidebar">☰</button>
       <nav class="breadcrumb" id="breadcrumb">{{BREADCRUMB}}</nav>
     </div>
     <article class="markdown-body" id="content-area">{{CONTENT}}</article>
@@ -296,7 +295,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     function toggleSidebar() {
       var sb = document.getElementById('sidebar');
       var main = document.querySelector('.main');
-      var btn = document.getElementById('expand-btn');
+      var btn = document.getElementById('menu-toggle');
       var overlay = document.getElementById('sidebar-overlay');
 
       if (isMobile()) {
@@ -305,7 +304,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       } else {
         var collapsed = sb.classList.toggle('collapsed');
         main.classList.toggle('expanded', collapsed);
-        btn.classList.toggle('hidden', !collapsed);
+        btn.classList.toggle('visible', collapsed);
         localStorage.setItem('mdview-sidebar', collapsed ? 'collapsed' : 'open');
       }
     }
@@ -313,7 +312,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       if (!isMobile() && localStorage.getItem('mdview-sidebar') === 'collapsed') {
         document.getElementById('sidebar').classList.add('collapsed');
         document.querySelector('.main').classList.add('expanded');
-        document.getElementById('expand-btn').classList.remove('hidden');
+        document.getElementById('menu-toggle').classList.add('visible');
       }
     })();
 
@@ -528,7 +527,8 @@ function dirPage(urlPath, entries, sidebar) {
     .replace("{{TITLE}}", urlPath)
     .replace("{{SIDEBAR}}", sidebar)
     .replace("{{BREADCRUMB}}", breadcrumb(urlPath))
-    .replace("{{CONTENT}}", content);
+    .replace("{{CONTENT}}", content)
+    .replace("{{ROOT_NAME}}", ROOT_NAME);
 }
 
 function mdPage(urlPath, markdown, sidebar) {
@@ -538,7 +538,8 @@ function mdPage(urlPath, markdown, sidebar) {
     .replace("{{TITLE}}", urlPath)
     .replace("{{SIDEBAR}}", sidebar)
     .replace("{{BREADCRUMB}}", breadcrumb(urlPath))
-    .replace("{{CONTENT}}", content);
+    .replace("{{CONTENT}}", content)
+    .replace("{{ROOT_NAME}}", ROOT_NAME);
 }
 
 function codePage(urlPath, code, ext, filename, sidebar) {
@@ -549,7 +550,8 @@ function codePage(urlPath, code, ext, filename, sidebar) {
     .replace("{{TITLE}}", urlPath)
     .replace("{{SIDEBAR}}", sidebar)
     .replace("{{BREADCRUMB}}", breadcrumb(urlPath))
-    .replace("{{CONTENT}}", content);
+    .replace("{{CONTENT}}", content)
+    .replace("{{ROOT_NAME}}", ROOT_NAME);
 }
 
 // --- Content API for SPA navigation ---
