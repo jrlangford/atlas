@@ -185,13 +185,20 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     body.light .sidebar-title a { color: #1f2328; }
     .sidebar-title a { text-decoration: none; }
     .sidebar-title a:hover { text-decoration: underline; }
-    .theme-toggle, .collapse-btn { cursor: pointer; background: none; border: 1px solid #444; border-radius: 6px; padding: 2px 8px; font-size: 14px; line-height: 1; }
-    body.dark .theme-toggle, body.dark .collapse-btn { border-color: #444; color: #e6edf3; }
-    body.light .theme-toggle, body.light .collapse-btn { border-color: #ccc; color: #1f2328; }
+    .theme-toggle { cursor: pointer; background: none; border: 1px solid #444; border-radius: 6px; padding: 2px 8px; font-size: 14px; line-height: 1; }
+    body.dark .theme-toggle { border-color: #444; color: #e6edf3; }
+    body.light .theme-toggle { border-color: #ccc; color: #1f2328; }
 
-    /* Menu toggle (inline in top-bar, hidden on desktop when sidebar is open) */
+    /* Sidebar pull-tab — attached to right edge, pokes out when collapsed */
+    .sidebar-tab { position: absolute; top: 12px; right: -24px; width: 24px; height: 32px; cursor: pointer; border: 1px solid; border-left: none; border-radius: 0 6px 6px 0; display: flex; align-items: center; justify-content: center; font-size: 12px; z-index: 11; transition: opacity 0.2s; }
+    body.dark .sidebar-tab { background: #010409; border-color: #21262d; color: #8b949e; }
+    body.light .sidebar-tab { background: #f6f8fa; border-color: #d1d9e0; color: #656d76; }
+    .sidebar-tab:hover { opacity: 1; }
+    body.dark .sidebar-tab:hover { color: #e6edf3; }
+    body.light .sidebar-tab:hover { color: #1f2328; }
+
+    /* Menu toggle (mobile only — inline in top-bar) */
     .menu-toggle { cursor: pointer; background: none; border: 1px solid; border-radius: 6px; padding: 2px 8px; font-size: 16px; line-height: 1; flex-shrink: 0; display: none; }
-    .menu-toggle.visible { display: inline-block; }
     body.dark .menu-toggle { border-color: #444; color: #e6edf3; }
     body.light .menu-toggle { border-color: #ccc; color: #1f2328; }
 
@@ -251,11 +258,11 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       .sidebar.open-mobile { transform: translateX(0); }
       .sidebar-overlay.visible { display: block; }
       .menu-toggle { display: inline-block; }
+      .sidebar-tab { display: none; }
     }
     /* Pre-paint sidebar collapse (prevents flash on page load) */
     html[data-sidebar="collapsed"] .sidebar { transform: translateX(-280px); }
     html[data-sidebar="collapsed"] .main { margin-left: 0; width: 100%; }
-    html[data-sidebar="collapsed"] .menu-toggle { display: inline-block; }
 
     .mermaid .node rect, .mermaid .node polygon, .mermaid .node circle, .mermaid .node .label-container { overflow: visible; }
     .mermaid svg { overflow: visible; }
@@ -273,10 +280,10 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
 <body class="dark">
   <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
   <aside class="sidebar" id="sidebar">
+    <div class="sidebar-tab" id="sidebar-tab" onclick="toggleSidebar()" title="Toggle sidebar">◀</div>
     <div class="sidebar-header">
       <span class="sidebar-title"><a href="/">{{ROOT_NAME}}</a></span>
       <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌓</button>
-      <button class="collapse-btn" onclick="toggleSidebar()" title="Hide sidebar">◀</button>
     </div>
     {{SIDEBAR}}
   </aside>
@@ -295,8 +302,8 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     function toggleSidebar() {
       var sb = document.getElementById('sidebar');
       var main = document.querySelector('.main');
-      var btn = document.getElementById('menu-toggle');
       var overlay = document.getElementById('sidebar-overlay');
+      var tab = document.getElementById('sidebar-tab');
 
       if (isMobile()) {
         var isOpen = sb.classList.toggle('open-mobile');
@@ -304,7 +311,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       } else {
         var collapsed = sb.classList.toggle('collapsed');
         main.classList.toggle('expanded', collapsed);
-        btn.classList.toggle('visible', collapsed);
+        if (tab) tab.textContent = collapsed ? '▶' : '◀';
         localStorage.setItem('mdview-sidebar', collapsed ? 'collapsed' : 'open');
       }
     }
@@ -312,7 +319,8 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       if (!isMobile() && localStorage.getItem('mdview-sidebar') === 'collapsed') {
         document.getElementById('sidebar').classList.add('collapsed');
         document.querySelector('.main').classList.add('expanded');
-        document.getElementById('menu-toggle').classList.add('visible');
+        var tab = document.getElementById('sidebar-tab');
+        if (tab) tab.textContent = '▶';
       }
     })();
 
