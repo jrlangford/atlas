@@ -6,12 +6,25 @@ A lightweight document and code viewer with markdown rendering, mermaid diagrams
 
 - **Markdown rendering** — reads `.md` files on each request, no build step
 - **Code file viewing** — syntax-highlighted rendering for 30+ languages
+- **Image view + download** — dedicated view page with filename, size, and Download button for `.png/.jpg/.jpeg/.gif/.webp/.svg/.bmp/.ico/.avif`
 - **Mermaid diagrams** — flowcharts, sequence diagrams, state diagrams, etc.
 - **File-tree sidebar** — collapsible, auto-expands to current page
 - **Light/dark mode** — toggle with persistence
 - **Directory browsing** — navigate folders with icon-based listing
 - **GitHub-style theming** — familiar appearance
 - **UTF-8 safe** — proper handling of multi-byte characters
+
+## Image URLs
+
+For any image file, three access modes are available:
+
+| URL | Response |
+|---|---|
+| `/path/to/image.png` | HTML wrapper page (browser navigation) OR raw bytes (markdown `<img>` embeds, curl) — decided by `Accept` header |
+| `/path/to/image.png?raw=1` | Raw bytes, regardless of `Accept` |
+| `/path/to/image.png?download=1` | Raw bytes with `Content-Disposition: attachment` |
+
+Markdown-embedded images (`![](image.png)` inside `.md` files) continue to render inline — the raw bytes are served when the request `Accept` header isn't `text/html`.
 
 ## Quick Start
 
