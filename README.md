@@ -1,6 +1,6 @@
 # Atlas
 
-A lightweight document and code viewer with markdown rendering, mermaid diagrams, syntax highlighting, and file-tree navigation. Zero dependencies — pure Node.js, client-side rendering.
+A lightweight document and code viewer with markdown rendering, mermaid diagrams, syntax highlighting, and file-tree navigation. No install step — the server uses only Node.js built-ins, and all client-side libraries are vendored in `vendor/`.
 
 ![Atlas rendering the Titan-themed test page with mermaid diagrams, code highlighting, and dark-mode GitHub styling](docs/atlas-render.png)
 
@@ -51,9 +51,11 @@ PORT=9090 ADDRESS=0.0.0.0 node server.js /path/to/your/docs
 
 ## Architecture
 
-- **Runtime:** Node.js (no dependencies)
-- **Rendering:** Client-side via [marked](https://github.com/markedjs/marked), [mermaid](https://github.com/mermaid-js/mermaid), [highlight.js](https://github.com/highlightjs/highlight.js)
-- **Styling:** [github-markdown-css](https://github.com/sindresorhus/github-markdown-css)
-- **Server:** Single-file `server.js` using `node:http`
+- **Server:** Single-file `server.js` using only Node built-ins (`node:http`, `node:fs/promises`, `node:path`, `node:zlib`, `node:crypto`). No `package.json`, no `npm install`, no `node_modules`.
+- **Client rendering:** Client-side via [marked](https://github.com/markedjs/marked), [mermaid](https://github.com/mermaid-js/mermaid), and [highlight.js](https://github.com/highlightjs/highlight.js), with [github-markdown-css](https://github.com/sindresorhus/github-markdown-css) for styling. These libraries are **vendored** — checked into `vendor/` — so nothing is fetched at runtime or build time.
 
 The server reads files on each request and serves them inside an HTML template. All rendering happens in the browser — no intermediate format, no build step. The file tree sidebar is built server-side and cached for 30 seconds.
+
+### A note on dependencies
+
+Atlas has **no runtime package manager dependencies** (nothing to `npm install`), but it is **not dependency-free**. The client-side libraries in `vendor/` are third-party code — they carry their own licences (marked, mermaid, highlight.js, github-markdown-css) and must be updated manually when you want newer versions. The tradeoff is intentional: you clone the repo and run `node server.js` — no install, no network fetches, no lockfile drift.
