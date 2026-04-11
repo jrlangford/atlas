@@ -17,10 +17,20 @@ const MIME = {
   ".json": "application/json",
   ".png": "image/png",
   ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
   ".svg": "image/svg+xml",
   ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
   ".ico": "image/x-icon",
+  ".avif": "image/avif",
 };
+
+// Image extensions — served as dedicated view page for browser navigation,
+// raw bytes for markdown img embeds
+const IMAGE_EXTENSIONS = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico", ".avif",
+]);
 
 const COMPRESSIBLE = new Set([
   "text/html", "text/css", "application/javascript", "application/json",
@@ -29,6 +39,7 @@ const COMPRESSIBLE = new Set([
 
 // Extensions rendered as syntax-highlighted code pages (instead of download)
 const CODE_EXTENSIONS = new Set([
+  ".txt", ".log",
   ".yaml", ".yml", ".json", ".toml", ".ini", ".cfg", ".conf",
   ".py", ".ts", ".js", ".jsx", ".tsx", ".go", ".rs", ".rb", ".java",
   ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt",
@@ -44,6 +55,7 @@ const CODE_EXTENSIONS = new Set([
 
 // Map file extensions to highlight.js language identifiers
 const EXT_TO_LANG = {
+  ".txt": "plaintext", ".log": "plaintext",
   ".yaml": "yaml", ".yml": "yaml", ".json": "json", ".toml": "toml",
   ".ini": "ini", ".cfg": "ini", ".conf": "nginx", ".properties": "properties",
   ".py": "python", ".ts": "typescript", ".js": "javascript",
@@ -133,8 +145,14 @@ async function buildTree(dir, urlBase) {
     if (entry.isDirectory()) {
       const children = await buildTree(join(dir, entry.name), href);
       html += `<li class="tree-dir"><span class="tree-toggle" onclick="this.parentElement.classList.toggle('open')">📁 ${entry.name}</span>${children}</li>`;
-    } else if (entry.name.endsWith(".md") || CODE_EXTENSIONS.has(extname(entry.name).toLowerCase()) || entry.name.toLowerCase() === "dockerfile" || entry.name.toLowerCase() === "makefile" || entry.name.toLowerCase() === "justfile") {
-      html += `<li class="tree-file"><a href="${href}">📄 ${entry.name}</a></li>`;
+    } else {
+      const lower = entry.name.toLowerCase();
+      const ext = extname(lower);
+      if (lower.endsWith(".md") || CODE_EXTENSIONS.has(ext) || lower === "dockerfile" || lower === "makefile" || lower === "justfile") {
+        html += `<li class="tree-file"><a href="${href}">📄 ${entry.name}</a></li>`;
+      } else if (IMAGE_EXTENSIONS.has(ext)) {
+        html += `<li class="tree-file"><a href="${href}">🖼 ${entry.name}</a></li>`;
+      }
     }
   }
   html += "</ul>";
@@ -241,6 +259,22 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     .dir-listing .icon { margin-right: 8px; }
     body.dark pre code.hljs { background: #161b22; border-radius: 6px; }
     body.light pre code.hljs { background: #f6f8fa; border-radius: 6px; }
+
+    /* Image view */
+    .image-view { max-width: 100%; }
+    .image-view h1 { margin-top: 0; margin-bottom: 8px; word-break: break-all; }
+    .image-meta { font-size: 13px; margin-bottom: 16px; }
+    body.dark .image-meta { color: #8b949e; }
+    body.light .image-meta { color: #656d76; }
+    .image-actions { margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .download-btn { display: inline-block; padding: 6px 14px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; border: 1px solid transparent; }
+    body.dark .download-btn { background: #238636; color: #fff; border-color: #2ea043; }
+    body.light .download-btn { background: #2da44e; color: #fff; border-color: #2c974b; }
+    .download-btn:hover { opacity: 0.9; text-decoration: none; }
+    .image-container { text-align: center; padding: 12px; border-radius: 6px; }
+    body.dark .image-container { background: #161b22; border: 1px solid #21262d; }
+    body.light .image-container { background: #f6f8fa; border: 1px solid #d1d9e0; }
+    .image-container img { max-width: 100%; height: auto; border-radius: 4px; }
 
     /* Mermaid node text clipping fix — adds breathing room for descenders on multi-line labels */
     .mermaid .nodeLabel { padding-bottom: 4px; }
@@ -391,6 +425,26 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
         area.innerHTML = '';
         area.appendChild(pre);
         hljs.highlightElement(codeEl);
+      } else if (data.type === 'image') {
+        function esc(s) { return String(s).replace(/[&<>"']/g, function(c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+        function fmt(n) {
+          if (n < 1024) return n + ' B';
+          if (n < 1048576) return (n/1024).toFixed(1) + ' KB';
+          if (n < 1073741824) return (n/1048576).toFixed(1) + ' MB';
+          return (n/1073741824).toFixed(2) + ' GB';
+        }
+        var fn = esc(data.filename);
+        area.innerHTML =
+          '<div class="image-view">' +
+          '<h1>' + fn + '</h1>' +
+          '<div class="image-meta">' + fmt(data.size) + '</div>' +
+          '<div class="image-actions">' +
+          '<a class="download-btn" href="' + esc(data.downloadUrl) + '" download="' + fn + '">⬇ Download</a>' +
+          '</div>' +
+          '<div class="image-container">' +
+          '<img src="' + esc(data.rawUrl) + '" alt="' + fn + '" />' +
+          '</div>' +
+          '</div>';
       }
 
       // Update sidebar active state
@@ -430,6 +484,8 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       if (!a) return;
       var href = a.getAttribute('href');
       if (!href || href.startsWith('http') || href.startsWith('/_') || href.startsWith('#')) return;
+      // Let browser handle download links and raw asset URLs natively
+      if (a.hasAttribute('download') || href.indexOf('?download') !== -1 || href.indexOf('?raw') !== -1) return;
       e.preventDefault();
       navigateTo(href);
     });
@@ -527,7 +583,7 @@ function dirPage(urlPath, entries, sidebar) {
       return a.name.localeCompare(b.name);
     })
     .map((e) => {
-      const icon = e.isDir ? "📁" : "📄";
+      const icon = e.isDir ? "📁" : (IMAGE_EXTENSIONS.has(extname(e.name).toLowerCase()) ? "🖼" : "📄");
       const href = urlPath.replace(/\/?$/, "/") + e.name + (e.isDir ? "/" : "");
       return `<li><span class="icon">${icon}</span><a href="${href}">${e.name}${e.isDir ? "/" : ""}</a></li>`;
     })
@@ -565,6 +621,38 @@ function codePage(urlPath, code, ext, filename, sidebar) {
     .replace("{{ROOT_NAME}}", ROOT_NAME);
 }
 
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function imagePage(urlPath, filename, size, sidebar) {
+  const safeFilename = escHtml(filename);
+  const safeUrl = escHtml(urlPath);
+  const content = `<div class="image-view">
+  <h1>${safeFilename}</h1>
+  <div class="image-meta">${formatBytes(size)}</div>
+  <div class="image-actions">
+    <a class="download-btn" href="${safeUrl}?download=1" download="${safeFilename}">⬇ Download</a>
+  </div>
+  <div class="image-container">
+    <img src="${safeUrl}?raw=1" alt="${safeFilename}" />
+  </div>
+</div>`;
+  return PAGE_TEMPLATE
+    .replace("{{TITLE}}", urlPath)
+    .replace("{{SIDEBAR}}", sidebar)
+    .replace("{{BREADCRUMB}}", breadcrumb(urlPath))
+    .replace("{{CONTENT}}", content)
+    .replace("{{ROOT_NAME}}", ROOT_NAME);
+}
+
 // --- Content API for SPA navigation ---
 
 async function apiContent(urlPath) {
@@ -587,9 +675,10 @@ async function apiContent(urlPath) {
         return a.name.localeCompare(b.name);
       })
       .map((e) => {
-        const icon = e.isDir = e.isDirectory() ? "📁" : "📄";
-        const href = urlPath.replace(/\/?$/, "/") + e.name + (e.isDirectory() ? "/" : "");
-        return `<li><span class="icon">${icon}</span><a href="${href}">${e.name}${e.isDirectory() ? "/" : ""}</a></li>`;
+        const isDir = e.isDirectory();
+        const icon = isDir ? "📁" : (IMAGE_EXTENSIONS.has(extname(e.name).toLowerCase()) ? "🖼" : "📄");
+        const href = urlPath.replace(/\/?$/, "/") + e.name + (isDir ? "/" : "");
+        return `<li><span class="icon">${icon}</span><a href="${href}">${e.name}${isDir ? "/" : ""}</a></li>`;
       })
       .join("\n");
     result.type = "directory";
@@ -612,6 +701,15 @@ async function apiContent(urlPath) {
     result.type = "code";
     result.content = Buffer.from(content, "utf-8").toString("base64");
     result.lang = EXT_TO_LANG[ext] || guessLangFromFilename(filename) || "plaintext";
+    return result;
+  }
+
+  if (IMAGE_EXTENSIONS.has(ext)) {
+    result.type = "image";
+    result.filename = filename;
+    result.size = st.size;
+    result.rawUrl = urlPath + "?raw=1";
+    result.downloadUrl = urlPath + "?download=1";
     return result;
   }
 
@@ -706,6 +804,44 @@ const server = createServer(async (req, res) => {
     if (CODE_EXTENSIONS.has(ext) || guessLangFromFilename(filename)) {
       const content = await readFile(fsPath, "utf-8");
       sendResponse(req, res, 200, "text/html; charset=utf-8", codePage(urlPath, content, ext, filename, sidebar));
+      return;
+    }
+
+    // Image handling:
+    //   ?download=1 → raw bytes with Content-Disposition: attachment
+    //   ?raw=1 → raw bytes (used by imagePage's <img src> and markdown embeds)
+    //   (no query, Accept: text/html) → HTML wrapper page with download button
+    //   (no query, other Accept) → raw bytes (for markdown <img> embeds and curl/scripts)
+    if (IMAGE_EXTENSIONS.has(ext)) {
+      const query = new URL(req.url, `http://${req.headers.host}`).searchParams;
+      const mime = MIME[ext] || "application/octet-stream";
+
+      if (query.has("download")) {
+        const data = await readFile(fsPath);
+        res.writeHead(200, {
+          "Content-Type": mime,
+          "Content-Length": data.length,
+          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        });
+        res.end(data);
+        return;
+      }
+
+      if (query.has("raw")) {
+        const data = await readFile(fsPath);
+        sendResponse(req, res, 200, mime, data);
+        return;
+      }
+
+      const accept = req.headers.accept || "";
+      if (accept.includes("text/html")) {
+        sendResponse(req, res, 200, "text/html; charset=utf-8", imagePage(urlPath, filename, st.size, sidebar));
+        return;
+      }
+
+      // Default: raw bytes (for markdown img embeds, curl, scripts)
+      const data = await readFile(fsPath);
+      sendResponse(req, res, 200, mime, data);
       return;
     }
 
