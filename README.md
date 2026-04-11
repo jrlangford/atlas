@@ -2,6 +2,8 @@
 
 A lightweight document and code viewer with markdown rendering, mermaid diagrams, syntax highlighting, and file-tree navigation. Zero dependencies — pure Node.js, client-side rendering.
 
+![Atlas rendering the Titan-themed test page with mermaid diagrams, code highlighting, and dark-mode GitHub styling](docs/atlas-render.png)
+
 ## Features
 
 - **Markdown rendering** — reads `.md` files on each request, no build step
