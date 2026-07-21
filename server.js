@@ -162,8 +162,15 @@ async function buildTree(dir, urlBase, depth = 0) {
     }
     const href = urlBase + entry.name + (isDir ? "/" : "");
     if (isDir) {
-      const children = followedLink || depth >= MAX_TREE_DEPTH ? "" : await buildTree(full, href, depth + 1);
-      html += `<li class="tree-dir"><span class="tree-toggle" onclick="this.parentElement.classList.toggle('open')">📁 ${entry.name}</span>${children}</li>`;
+      if (followedLink) {
+        // Symlinked dir: a navigable LINK (no pre-built subtree — an aggregate
+        // of full workdirs is far too large to inline). Click loads its
+        // directory-listing page; drill down from there.
+        html += `<li class="tree-dir"><a href="${href}">📁 ${entry.name}</a></li>`;
+      } else {
+        const children = depth >= MAX_TREE_DEPTH ? "" : await buildTree(full, href, depth + 1);
+        html += `<li class="tree-dir"><span class="tree-toggle" onclick="this.parentElement.classList.toggle('open')">📁 ${entry.name}</span>${children}</li>`;
+      }
     } else {
       const lower = entry.name.toLowerCase();
       const ext = extname(lower);
