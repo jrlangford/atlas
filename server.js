@@ -128,10 +128,16 @@ async function loadVendorAssets() {
 
 // --- File tree builder ---
 
-async function buildTree(dir, urlBase) {
+// Opt-in: follow symlinked directories in the sidebar tree so an aggregate dir
+// of symlinks (e.g. → each agent's workdir) is browsable. Off by default so
+// existing instances are unaffected. MAX_TREE_DEPTH bounds symlink cycles.
+const FOLLOW_SYMLINKS = process.env.ATLAS_FOLLOW_SYMLINKS === "1";
+const MAX_TREE_DEPTH = 12;
+
+async function buildTree(dir, urlBase, depth = 0) {
   const entries = await readdir(dir, { withFileTypes: true });
   const sorted = entries
-    .filter((e) => !e.name.startsWith("."))
+    .filter((e) => !e.name.startsWith(".") && e.name !== "node_modules")
     .sort((a, b) => {
       const aDir = a.isDirectory();
       const bDir = b.isDirectory();
@@ -141,9 +147,22 @@ async function buildTree(dir, urlBase) {
 
   let html = "<ul>";
   for (const entry of sorted) {
-    const href = urlBase + entry.name + (entry.isDirectory() ? "/" : "");
-    if (entry.isDirectory()) {
-      const children = await buildTree(join(dir, entry.name), href);
+    const full = join(dir, entry.name);
+    let isDir = entry.isDirectory();
+    let followedLink = false;
+    // Resolve symlinked directories when following is enabled (dirent type
+    // reflects the link itself, so stat the target). Followed dirs are shown as
+    // navigable entries but NOT recursed into the sidebar — an aggregate of
+    // symlinked workdirs is far too large to inline (14MB+); users drill in via
+    // the directory-listing pages instead.
+    if (!isDir && FOLLOW_SYMLINKS && entry.isSymbolicLink()) {
+      const target = await stat(full).catch(() => null);
+      isDir = target?.isDirectory() ?? false;
+      followedLink = isDir;
+    }
+    const href = urlBase + entry.name + (isDir ? "/" : "");
+    if (isDir) {
+      const children = followedLink || depth >= MAX_TREE_DEPTH ? "" : await buildTree(full, href, depth + 1);
       html += `<li class="tree-dir"><span class="tree-toggle" onclick="this.parentElement.classList.toggle('open')">📁 ${entry.name}</span>${children}</li>`;
     } else {
       const lower = entry.name.toLowerCase();
@@ -598,8 +617,16 @@ function dirPage(urlPath, entries, sidebar) {
     .replace("{{ROOT_NAME}}", ROOT_NAME);
 }
 
+// Strip a leading YAML frontmatter block (optionally preceded by HTML comment[s])
+// before markdown rendering, so it doesn't show as raw text / <hr> / # headings.
+// Anchored at file start; mid-document --- (thematic breaks) are untouched.
+// Rendered markdown only — raw/code/download paths keep the full file.
+function stripFrontmatter(md) {
+  return md.replace(/^\s*(?:<!--[\s\S]*?-->\s*)*---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+}
+
 function mdPage(urlPath, markdown, sidebar) {
-  const b64 = Buffer.from(markdown, "utf-8").toString("base64");
+  const b64 = Buffer.from(stripFrontmatter(markdown), "utf-8").toString("base64");
   const content = `<div id="raw-markdown" data-content="${b64}"></div>`;
   return PAGE_TEMPLATE
     .replace("{{TITLE}}", urlPath)
@@ -692,7 +719,7 @@ async function apiContent(urlPath) {
   if (ext === ".md") {
     const content = await readFile(fsPath, "utf-8");
     result.type = "markdown";
-    result.content = Buffer.from(content, "utf-8").toString("base64");
+    result.content = Buffer.from(stripFrontmatter(content), "utf-8").toString("base64");
     return result;
   }
 
