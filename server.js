@@ -24,6 +24,8 @@ const MIME = {
   ".bmp": "image/bmp",
   ".ico": "image/x-icon",
   ".avif": "image/avif",
+  ".pdf": "application/pdf",
+  ".md": "text/markdown; charset=utf-8",
 };
 
 // Image extensions — served as dedicated view page for browser navigation,
@@ -178,6 +180,8 @@ async function buildTree(dir, urlBase, depth = 0) {
         html += `<li class="tree-file"><a href="${href}">📄 ${entry.name}</a></li>`;
       } else if (IMAGE_EXTENSIONS.has(ext)) {
         html += `<li class="tree-file"><a href="${href}">🖼 ${entry.name}</a></li>`;
+      } else if (ext === ".pdf") {
+        html += `<li class="tree-file"><a href="${href}">📕 ${entry.name}</a></li>`;
       }
     }
   }
@@ -301,6 +305,31 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     body.dark .image-container { background: #161b22; border: 1px solid #21262d; }
     body.light .image-container { background: #f6f8fa; border: 1px solid #d1d9e0; }
     .image-container img { max-width: 100%; height: auto; border-radius: 4px; }
+    .download-btn.secondary { background: transparent; }
+    body.dark .download-btn.secondary { color: #58a6ff; border-color: #30363d; }
+    body.light .download-btn.secondary { color: #0969da; border-color: #d1d9e0; }
+
+    /* PDF view — browser-native viewer inside an iframe */
+    .pdf-view { max-width: 100%; }
+    .pdf-view h1 { margin-top: 0; margin-bottom: 8px; word-break: break-all; }
+    .pdf-actions { margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .pdf-frame { width: 100%; height: calc(100vh - 160px); min-height: 480px; border-radius: 6px; }
+    body.dark .pdf-frame { border: 1px solid #21262d; background: #161b22; }
+    body.light .pdf-frame { border: 1px solid #d1d9e0; background: #f6f8fa; }
+
+    /* Generic download view — non-previewable file types */
+    .download-view { max-width: 640px; margin: 40px auto; text-align: center; }
+    .download-view h1 { word-break: break-all; margin-bottom: 4px; }
+    .download-icon { font-size: 56px; line-height: 1; margin-bottom: 12px; }
+    .download-note { font-size: 13px; margin-top: 16px; }
+    body.dark .download-note { color: #8b949e; }
+    body.light .download-note { color: #656d76; }
+
+    /* Top-bar download button (universal, for any file view) */
+    .top-dl { flex-shrink: 0; text-decoration: none; border: 1px solid; border-radius: 6px; padding: 2px 10px; font-size: 14px; line-height: 1.6; }
+    body.dark .top-dl { border-color: #30363d; color: #58a6ff; }
+    body.light .top-dl { border-color: #d1d9e0; color: #0969da; }
+    .top-dl:hover { text-decoration: none; opacity: 0.8; }
 
     /* Mermaid node text clipping fix — adds breathing room for descenders on multi-line labels */
     .mermaid .nodeLabel { padding-bottom: 4px; }
@@ -328,6 +357,30 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
 
     .mermaid .node rect, .mermaid .node polygon, .mermaid .node circle, .mermaid .node .label-container { overflow: visible; }
     .mermaid svg { overflow: visible; }
+
+    /* Native browser printing / Save-as-PDF — strip chrome, force readable colors,
+       keep blocks intact across page breaks. */
+    @media print {
+      .sidebar, .sidebar-tab, .sidebar-overlay, .top-bar, .menu-toggle,
+      .theme-toggle, .image-actions, .pdf-actions, .download-btn, .top-dl { display: none !important; }
+      body { display: block !important; }
+      .main, .main.expanded { margin-left: 0 !important; width: 100% !important; padding: 0 !important; }
+      .markdown-body { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+      body, body.dark, body.light { background: #fff !important; color: #000 !important; }
+      /* github-markdown-dark sets its own background + heading/text colors at higher
+         specificity than body, so print would show a dark band with near-white text.
+         Force the container light and the text dark. */
+      .main, .markdown-body { background: #fff !important; }
+      .markdown-body, .markdown-body h1, .markdown-body h2, .markdown-body h3,
+      .markdown-body h4, .markdown-body h5, .markdown-body h6,
+      .markdown-body p, .markdown-body li, .markdown-body td, .markdown-body th,
+      .markdown-body blockquote, .markdown-body strong, .markdown-body em { color: #000 !important; }
+      a { color: #000 !important; text-decoration: underline; }
+      pre, code, table, blockquote, img, .mermaid, .image-container { break-inside: avoid; page-break-inside: avoid; }
+      h1, h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
+      pre code.hljs, body.dark pre code.hljs, body.light pre code.hljs { background: #f6f8fa !important; color: #1f2328 !important; }
+      .pdf-frame { height: auto !important; min-height: 0 !important; }
+    }
   </style>
   <script>
     // Apply sidebar + theme state before first paint to prevent flash
@@ -353,6 +406,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
     <div class="top-bar">
       <button class="menu-toggle" id="menu-toggle" onclick="toggleSidebar()" title="Toggle sidebar">☰</button>
       <nav class="breadcrumb" id="breadcrumb">{{BREADCRUMB}}</nav>
+      <a class="top-dl" id="top-dl" href="#" title="Download raw file" style="display:none">⬇</a>
     </div>
     <article class="markdown-body" id="content-area">{{CONTENT}}</article>
   </div>
@@ -408,11 +462,26 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
 
     // --- SPA navigation ---
 
+    function esc(s) { return String(s).replace(/[&<>"']/g, function(c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+    function fmtBytes(n) {
+      if (n < 1024) return n + ' B';
+      if (n < 1048576) return (n/1024).toFixed(1) + ' KB';
+      if (n < 1073741824) return (n/1048576).toFixed(1) + ' MB';
+      return (n/1073741824).toFixed(2) + ' GB';
+    }
+    function updateDownloadBtn(data) {
+      var dl = document.getElementById('top-dl');
+      if (!dl) return;
+      if (data.type === 'directory') { dl.style.display = 'none'; }
+      else { dl.style.display = ''; dl.setAttribute('href', data.path + '?download=1'); }
+    }
+
     function renderContent(data) {
       var area = document.getElementById('content-area');
       var bc = document.getElementById('breadcrumb');
       bc.innerHTML = data.breadcrumb;
       document.title = data.title;
+      updateDownloadBtn(data);
 
       if (data.type === 'directory') {
         area.innerHTML = data.html;
@@ -452,24 +521,41 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
         area.appendChild(pre);
         hljs.highlightElement(codeEl);
       } else if (data.type === 'image') {
-        function esc(s) { return String(s).replace(/[&<>"']/g, function(c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
-        function fmt(n) {
-          if (n < 1024) return n + ' B';
-          if (n < 1048576) return (n/1024).toFixed(1) + ' KB';
-          if (n < 1073741824) return (n/1048576).toFixed(1) + ' MB';
-          return (n/1073741824).toFixed(2) + ' GB';
-        }
         var fn = esc(data.filename);
         area.innerHTML =
           '<div class="image-view">' +
           '<h1>' + fn + '</h1>' +
-          '<div class="image-meta">' + fmt(data.size) + '</div>' +
+          '<div class="image-meta">' + fmtBytes(data.size) + '</div>' +
           '<div class="image-actions">' +
           '<a class="download-btn" href="' + esc(data.downloadUrl) + '" download="' + fn + '">⬇ Download</a>' +
           '</div>' +
           '<div class="image-container">' +
           '<img src="' + esc(data.rawUrl) + '" alt="' + fn + '" />' +
           '</div>' +
+          '</div>';
+      } else if (data.type === 'pdf') {
+        var pfn = esc(data.filename);
+        area.innerHTML =
+          '<div class="pdf-view">' +
+          '<h1>' + pfn + '</h1>' +
+          '<div class="image-meta">' + fmtBytes(data.size) + '</div>' +
+          '<div class="pdf-actions">' +
+          '<a class="download-btn" href="' + esc(data.downloadUrl) + '" download="' + pfn + '">⬇ Download</a>' +
+          '<a class="download-btn secondary" href="' + esc(data.rawUrl) + '" target="_blank" rel="noopener">↗ Open full page</a>' +
+          '</div>' +
+          '<iframe class="pdf-frame" src="' + esc(data.rawUrl) + '" title="' + pfn + '"></iframe>' +
+          '</div>';
+      } else if (data.type === 'download') {
+        var dfn = esc(data.filename);
+        area.innerHTML =
+          '<div class="download-view">' +
+          '<div class="download-icon">📦</div>' +
+          '<h1>' + dfn + '</h1>' +
+          '<div class="image-meta">' + fmtBytes(data.size) + '</div>' +
+          '<div class="image-actions">' +
+          '<a class="download-btn" href="' + esc(data.downloadUrl) + '" download="' + dfn + '">⬇ Download</a>' +
+          '</div>' +
+          '<p class="download-note">This file type can\\'t be previewed in Atlas.</p>' +
           '</div>';
       }
 
@@ -535,6 +621,13 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
           }
         }
       });
+      // Top-bar download button: shown for file views (path without trailing slash),
+      // hidden for directory listings and the root.
+      var dl = document.getElementById('top-dl');
+      if (dl && current !== '/' && !current.endsWith('/')) {
+        dl.style.display = '';
+        dl.setAttribute('href', window.location.pathname + '?download=1');
+      }
     })();
 
     var rawCode = document.getElementById('raw-code');
@@ -687,6 +780,49 @@ function imagePage(urlPath, filename, size, sidebar) {
     .replace("{{ROOT_NAME}}", ROOT_NAME);
 }
 
+// PDF view page — hands the raw bytes to the browser's built-in PDF viewer via an
+// iframe, inside Atlas chrome, with download + open-full-page actions.
+function pdfPage(urlPath, filename, size, sidebar) {
+  const safeFilename = escHtml(filename);
+  const safeUrl = escHtml(urlPath);
+  const content = `<div class="pdf-view">
+  <h1>${safeFilename}</h1>
+  <div class="image-meta">${formatBytes(size)}</div>
+  <div class="pdf-actions">
+    <a class="download-btn" href="${safeUrl}?download=1" download="${safeFilename}">⬇ Download</a>
+    <a class="download-btn secondary" href="${safeUrl}?raw=1" target="_blank" rel="noopener">↗ Open full page</a>
+  </div>
+  <iframe class="pdf-frame" src="${safeUrl}?raw=1" title="${safeFilename}"></iframe>
+</div>`;
+  return PAGE_TEMPLATE
+    .replace("{{TITLE}}", urlPath)
+    .replace("{{SIDEBAR}}", sidebar)
+    .replace("{{BREADCRUMB}}", breadcrumb(urlPath))
+    .replace("{{CONTENT}}", content)
+    .replace("{{ROOT_NAME}}", ROOT_NAME);
+}
+
+// Generic download landing page — non-previewable file types (docx, xlsx, zip, …).
+function downloadPage(urlPath, filename, size, sidebar) {
+  const safeFilename = escHtml(filename);
+  const safeUrl = escHtml(urlPath);
+  const content = `<div class="download-view">
+  <div class="download-icon">📦</div>
+  <h1>${safeFilename}</h1>
+  <div class="image-meta">${formatBytes(size)}</div>
+  <div class="image-actions">
+    <a class="download-btn" href="${safeUrl}?download=1" download="${safeFilename}">⬇ Download</a>
+  </div>
+  <p class="download-note">This file type can't be previewed in Atlas.</p>
+</div>`;
+  return PAGE_TEMPLATE
+    .replace("{{TITLE}}", urlPath)
+    .replace("{{SIDEBAR}}", sidebar)
+    .replace("{{BREADCRUMB}}", breadcrumb(urlPath))
+    .replace("{{CONTENT}}", content)
+    .replace("{{ROOT_NAME}}", ROOT_NAME);
+}
+
 // --- Content API for SPA navigation ---
 
 async function apiContent(urlPath) {
@@ -747,7 +883,21 @@ async function apiContent(urlPath) {
     return result;
   }
 
-  return { error: "Unsupported file type" };
+  if (ext === ".pdf") {
+    result.type = "pdf";
+    result.filename = filename;
+    result.size = st.size;
+    result.rawUrl = urlPath + "?raw=1";
+    result.downloadUrl = urlPath + "?download=1";
+    return result;
+  }
+
+  // Any other file type → generic download page (previously an SPA dead-end).
+  result.type = "download";
+  result.filename = filename;
+  result.size = st.size;
+  result.downloadUrl = urlPath + "?download=1";
+  return result;
 }
 
 // --- Server ---
@@ -829,6 +979,29 @@ const server = createServer(async (req, res) => {
 
     const ext = extname(fsPath).toLowerCase();
     const filename = fsPath.split("/").pop();
+    const query = new URL(req.url, `http://${req.headers.host}`).searchParams;
+
+    // Universal raw bytes / download — works for ANY file type, ahead of the
+    // render branches so ?download=1 / ?raw=1 apply to markdown, code, and
+    // binaries alike (not just images, as before).
+    //   ?download=1 → raw bytes with Content-Disposition: attachment
+    //   ?raw=1      → raw bytes inline (used by <img>/<iframe> embeds, curl, scripts)
+    if (query.has("download") || query.has("raw")) {
+      const data = await readFile(fsPath);
+      const mime = MIME[ext] || "application/octet-stream";
+      if (query.has("download")) {
+        res.writeHead(200, {
+          "Content-Type": mime,
+          "Content-Length": data.length,
+          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        });
+        res.end(data);
+      } else {
+        sendResponse(req, res, 200, mime, data);
+      }
+      return;
+    }
+
     if (ext === ".md") {
       const content = await readFile(fsPath, "utf-8");
       sendResponse(req, res, 200, "text/html; charset=utf-8", mdPage(urlPath, content, sidebar));
@@ -841,45 +1014,36 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // Image handling:
-    //   ?download=1 → raw bytes with Content-Disposition: attachment
-    //   ?raw=1 → raw bytes (used by imagePage's <img src> and markdown embeds)
-    //   (no query, Accept: text/html) → HTML wrapper page with download button
-    //   (no query, other Accept) → raw bytes (for markdown <img> embeds and curl/scripts)
+    const accept = req.headers.accept || "";
+
+    // PDF → browser-native viewer page (html nav) or raw application/pdf (iframe embed, curl)
+    if (ext === ".pdf") {
+      if (accept.includes("text/html")) {
+        sendResponse(req, res, 200, "text/html; charset=utf-8", pdfPage(urlPath, filename, st.size, sidebar));
+      } else {
+        const data = await readFile(fsPath);
+        sendResponse(req, res, 200, "application/pdf", data);
+      }
+      return;
+    }
+
+    // Images → wrapper page (html nav) or raw bytes (markdown <img> embeds, curl, scripts)
     if (IMAGE_EXTENSIONS.has(ext)) {
-      const query = new URL(req.url, `http://${req.headers.host}`).searchParams;
-      const mime = MIME[ext] || "application/octet-stream";
-
-      if (query.has("download")) {
-        const data = await readFile(fsPath);
-        res.writeHead(200, {
-          "Content-Type": mime,
-          "Content-Length": data.length,
-          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-        });
-        res.end(data);
-        return;
-      }
-
-      if (query.has("raw")) {
-        const data = await readFile(fsPath);
-        sendResponse(req, res, 200, mime, data);
-        return;
-      }
-
-      const accept = req.headers.accept || "";
       if (accept.includes("text/html")) {
         sendResponse(req, res, 200, "text/html; charset=utf-8", imagePage(urlPath, filename, st.size, sidebar));
         return;
       }
-
-      // Default: raw bytes (for markdown img embeds, curl, scripts)
       const data = await readFile(fsPath);
-      sendResponse(req, res, 200, mime, data);
+      sendResponse(req, res, 200, MIME[ext] || "application/octet-stream", data);
       return;
     }
 
-    // Serve static files as-is
+    // Any other file type → download landing page (html nav) or raw bytes (curl/scripts).
+    // Previously a bare octet-stream that broke SPA navigation on click.
+    if (accept.includes("text/html")) {
+      sendResponse(req, res, 200, "text/html; charset=utf-8", downloadPage(urlPath, filename, st.size, sidebar));
+      return;
+    }
     const mime = MIME[ext] || "application/octet-stream";
     const data = await readFile(fsPath);
     sendResponse(req, res, 200, mime, data);
