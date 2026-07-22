@@ -376,7 +376,13 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       .markdown-body p, .markdown-body li, .markdown-body td, .markdown-body th,
       .markdown-body blockquote, .markdown-body strong, .markdown-body em { color: #000 !important; }
       a { color: #000 !important; text-decoration: underline; }
-      pre, code, table, blockquote, img, .mermaid, .image-container { break-inside: avoid; page-break-inside: avoid; }
+      pre, code, blockquote, img, .mermaid, .image-container { break-inside: avoid; page-break-inside: avoid; }
+      /* Tables flow across pages — fill the current page, continue the remaining
+         rows on the next — instead of jumping the whole table to a new page and
+         leaving a gap. Individual rows stay intact; the header repeats per page. */
+      table { break-inside: auto !important; page-break-inside: auto !important; }
+      thead { display: table-header-group; }
+      tr, td, th { break-inside: avoid; page-break-inside: avoid; }
       h1, h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
       pre code.hljs, body.dark pre code.hljs, body.light pre code.hljs { background: #f6f8fa !important; color: #1f2328 !important; }
       .pdf-frame { height: auto !important; min-height: 0 !important; }
