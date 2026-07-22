@@ -366,6 +366,11 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       body { display: block !important; }
       .main, .main.expanded { margin-left: 0 !important; width: 100% !important; padding: 0 !important; }
       .markdown-body { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+      /* Bake ~75% of the on-screen 16px base into print so pages come out at a
+         comfortable size at the dialog's default 100% Scale — no need to dial the
+         Scale down (which sub-pixels thin table borders away, notably in Firefox).
+         Headings/spacing are em-relative so they scale with this. */
+      .markdown-body { font-size: 12px !important; }
       body, body.dark, body.light { background: #fff !important; color: #000 !important; }
       /* github-markdown-dark sets its own background + heading/text colors at higher
          specificity than body, so print would show a dark band with near-white text.
@@ -383,6 +388,11 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
       table { break-inside: auto !important; page-break-inside: auto !important; }
       thead { display: table-header-group; }
       tr, td, th { break-inside: avoid; page-break-inside: avoid; }
+      /* Force solid, visible grid lines on white and drop the dark row fills, so
+         tables print with borders whether "Print backgrounds" is on or off, in
+         both Chrome and Firefox. */
+      .markdown-body table, .markdown-body th, .markdown-body td { border: 1px solid #9aa0a6 !important; }
+      .markdown-body table tr, .markdown-body th, .markdown-body td { background-color: transparent !important; }
       h1, h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
       pre code.hljs, body.dark pre code.hljs, body.light pre code.hljs { background: #f6f8fa !important; color: #1f2328 !important; }
       .pdf-frame { height: auto !important; min-height: 0 !important; }
