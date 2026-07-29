@@ -182,6 +182,12 @@ async function buildTree(dir, urlBase, depth = 0) {
         html += `<li class="tree-file"><a href="${href}">🖼 ${entry.name}</a></li>`;
       } else if (ext === ".pdf") {
         html += `<li class="tree-file"><a href="${href}">📕 ${entry.name}</a></li>`;
+      } else {
+        // Any other file type — Atlas doesn't render it, but surface it as a
+        // downloadable entry so it's findable in nav rather than reachable only
+        // by a URL you already know (e.g. .docx / .xlsx / .zip). Serving is
+        // unchanged (raw octet-stream); this only makes it visible in the sidebar.
+        html += `<li class="tree-file"><a href="${href}" download>📎 ${entry.name}</a></li>`;
       }
     }
   }
