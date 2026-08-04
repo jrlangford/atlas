@@ -522,7 +522,18 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
               }
             },
             renderer: function(token) {
-              return '<pre class="mermaid">' + token.text + '</pre>';
+              // HTML-escape the diagram source: this string goes through
+              // innerHTML, and unescaped mermaid syntax like <<stereotype>>
+              // is parsed as HTML tags — the browser swallows them and
+              // auto-closes them at the end of the <pre>, so mermaid receives
+              // stray </...> tags and bombs with a persistent "Syntax error"
+              // (fqbc-obligation-catalog, 2026-08-04). mermaid entity-decodes
+              // when reading the node, so escaping round-trips correctly.
+              var escaped = token.text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+              return '<pre class="mermaid">' + escaped + '</pre>';
             }
           }]
         };
@@ -686,7 +697,18 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
               }
             },
             renderer: function(token) {
-              return '<pre class="mermaid">' + token.text + '</pre>';
+              // HTML-escape the diagram source: this string goes through
+              // innerHTML, and unescaped mermaid syntax like <<stereotype>>
+              // is parsed as HTML tags — the browser swallows them and
+              // auto-closes them at the end of the <pre>, so mermaid receives
+              // stray </...> tags and bombs with a persistent "Syntax error"
+              // (fqbc-obligation-catalog, 2026-08-04). mermaid entity-decodes
+              // when reading the node, so escaping round-trips correctly.
+              var escaped = token.text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+              return '<pre class="mermaid">' + escaped + '</pre>';
             }
           }]
         };
