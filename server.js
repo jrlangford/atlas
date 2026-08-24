@@ -26,6 +26,9 @@ const MIME = {
   ".avif": "image/avif",
   ".pdf": "application/pdf",
   ".md": "text/markdown; charset=utf-8",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+  ".ttf": "font/ttf",
 };
 
 // Image extensions — served as dedicated view page for browser navigation,
@@ -115,16 +118,24 @@ function sendResponse(req, res, statusCode, contentType, body) {
 
 const vendorCache = new Map();
 
-async function loadVendorAssets() {
-  const files = await readdir(VENDOR_DIR).catch(() => []);
-  for (const file of files) {
-    const data = await readFile(join(VENDOR_DIR, file));
-    const ext = extname(file).toLowerCase();
+async function loadVendorAssets(dir = VENDOR_DIR, prefix = "") {
+  // Recursive so asset bundles with subdirs (e.g. KaTeX's fonts/) are served.
+  // Cache keys are posix-relative paths ("fonts/KaTeX_Main-Regular.woff2") to
+  // match the vendor route, which keys on the URL suffix after "/_vendor/".
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      await loadVendorAssets(join(dir, entry.name), rel);
+      continue;
+    }
+    const data = await readFile(join(dir, entry.name));
+    const ext = extname(entry.name).toLowerCase();
     const mime = MIME[ext] || "application/octet-stream";
     const etag = '"' + createHash("md5").update(data).digest("hex") + '"';
     const baseType = mime.split(";")[0].trim();
     const gzipped = COMPRESSIBLE.has(baseType) ? gzipSync(data) : null;
-    vendorCache.set(file, { data, mime, etag, gzipped });
+    vendorCache.set(rel, { data, mime, etag, gzipped });
   }
 }
 
@@ -220,6 +231,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
   <link id="md-css-light" rel="stylesheet" href="/_vendor/github-markdown-light.min.css" disabled>
   <link id="hljs-css-dark" rel="stylesheet" href="/_vendor/hljs-github-dark.min.css">
   <link id="hljs-css-light" rel="stylesheet" href="/_vendor/hljs-github-light.min.css" disabled>
+  <link id="katex-css" rel="stylesheet" href="/_vendor/katex.min.css">
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; transition: background 0.2s, color 0.2s; display: flex; min-height: 100vh; }
@@ -435,6 +447,8 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
   <script src="/_vendor/marked.min.js"></script>
   <script src="/_vendor/highlight.min.js"></script>
   <script src="/_vendor/mermaid.min.js"></script>
+  <script src="/_vendor/katex.min.js"></script>
+  <script src="/_vendor/atlas-math.js?v=2"></script>
   <script>
     function isMobile() { return window.innerWidth <= 768; }
     function toggleSidebar() {
@@ -539,10 +553,12 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
         };
 
         marked.use(mermaidExt);
+        if (window.AtlasMath) marked.use(window.AtlasMath.ext);
         marked.use({ gfm: true, breaks: false });
         area.innerHTML = marked.parse(md);
         area.querySelectorAll('pre code').forEach(function(el) { hljs.highlightElement(el); });
         mermaid.run({ nodes: area.querySelectorAll('.mermaid') });
+        if (window.AtlasMath) window.AtlasMath.render(area);
       } else if (data.type === 'code') {
         var code = new TextDecoder().decode(Uint8Array.from(atob(data.content), function(c) { return c.charCodeAt(0); }));
         var pre = document.createElement('pre');
@@ -714,12 +730,14 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
         };
 
         marked.use(mermaidExt);
+        if (window.AtlasMath) marked.use(window.AtlasMath.ext);
         marked.use({ gfm: true, breaks: false });
 
         document.querySelector('.markdown-body').innerHTML = marked.parse(md);
 
         document.querySelectorAll('pre code').forEach(function(el) { hljs.highlightElement(el); });
         mermaid.run({ nodes: document.querySelectorAll('.mermaid') });
+        if (window.AtlasMath) window.AtlasMath.render(document.querySelector('.markdown-body'));
       } catch(e) {
         document.querySelector('.markdown-body').innerHTML = '<pre style="color:red">' + e.message + '\\n' + e.stack + '</pre>';
       }
