@@ -227,6 +227,7 @@ const PAGE_TEMPLATE = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{TITLE}}</title>
+  <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHRpdGxlPkF0bGFzIC8gS25vd2xlZGdlIEh1YiDigJQgT3BlbiBib29rPC90aXRsZT48cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHJ4PSI3IiBmaWxsPSIjYjQ1MzA5Ii8+PHBhdGggZD0iTTUgOVExMC41IDYgMTYgMTBRMjEuNSA2IDI3IDlWMjRRMjEuNSAyMSAxNiAyNVExMC41IDIxIDUgMjRaIE0xNiAxMFYyNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyLjciIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4K">
   <link id="md-css-dark" rel="stylesheet" href="/_vendor/github-markdown-dark.min.css">
   <link id="md-css-light" rel="stylesheet" href="/_vendor/github-markdown-light.min.css" disabled>
   <link id="hljs-css-dark" rel="stylesheet" href="/_vendor/hljs-github-dark.min.css">
